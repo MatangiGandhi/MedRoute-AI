@@ -12,6 +12,8 @@ from models import HospitalRequest, BloodBank
 Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 
+from coordinator import coordinate_request
+
 app = FastAPI(
     title="MedRoute AI",
     description="Emergency Medical Logistics System",
@@ -132,3 +134,43 @@ def match_blood(request_id: int):
         "available_units": bank.available_units,
         "location": bank.location
     }
+
+@app.get("/priority-requests")
+def priority_requests():
+
+    requests = db.query(HospitalRequest).all()
+
+    priority_map = {
+        "High": 1,
+        "Medium": 2,
+        "Low": 3
+    }
+
+    sorted_requests = sorted(
+        requests,
+        key=lambda x: priority_map.get(x.urgency, 99)
+    )
+
+    return sorted_requests
+
+@app.get("/coordinate/{request_id}")
+def coordinate(request_id: int):
+
+    request = db.query(HospitalRequest).filter(
+        HospitalRequest.id == request_id
+    ).first()
+
+    if not request:
+        return {"error": "Request not found"}
+
+    bank = db.query(BloodBank).filter(
+        BloodBank.blood_type == request.blood_type
+    ).first()
+
+    if not bank:
+        return {"error": "No blood bank found"}
+
+    return coordinate_request(
+        request.hospital_name,
+        bank.bank_name
+    )
